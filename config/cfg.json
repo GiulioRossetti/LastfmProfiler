@@ -1,0 +1,17 @@
+{
+  "lastfm": ["f67b335443cc995fc874fc96d505a282", "3a27c40af728f2d3d420ddb1c93630b5",
+    "f5cc13b6ff4dc2de5b688dabbc127ea8", "fb75ac22084bc375e370a84f90704fba",
+      "41044a855c8b8ece2c297cb4428bdfd7", "b0dd3e3357ccba7d85b0bfa1f7390142"],
+  "echonest": ["CPNNPRGPTHKVC1XSW"],
+  "start_date": "2014-1-1",
+  "end_date": "2016-1-1",
+  "snapshot_days": 30,
+  "user_list": "config/users_list",
+  "mongodb": {
+    "username": "admin",
+    "password": "crepuscolo84",
+    "authsorce": "admin",
+    "host": "127.0.0.1",
+    "port": 27017
+  }
+}
