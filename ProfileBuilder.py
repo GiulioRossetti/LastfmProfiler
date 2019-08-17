@@ -28,7 +28,7 @@ def timeit(method):
         result = method(*arguments, **kw)
         te = time.time()
 
-        print 'Time:  %r %2.2f sec' % (method.__name__.strip("_"), te - ts)
+        print('Time:  %r %2.2f sec' % (method.__name__.strip("_"), te - ts))
         return result
 
     return timed
@@ -58,17 +58,17 @@ class ProfileBuilder(object):
         self.days_per_snapshot = days_per_snapshot
         # user's details
         details = self.dg.get_user_detail(username)
-        #db = self.dg.get_db_connection()
+        db = self.dg.get_db_connection()
         try:
             r = self.db.Lastfm_Profiles.user_info.find_one({'user_id': username})
             if r is None:
-                self.db.Lastfm_Profiles.user_info.insert(details)
+                self.db.Lastfm_Profiles.user_info.insert_one(details)
             elif not r['crawled']:
                 self.db.Lastfm_Profiles.user_info.update_one({'user_id': username}, {"$set": {"crawled": True}})
         except:
-            #db.close()
+            db.close()
             pass
-        #db.close()
+        db.close()
 
         delta = datetime.timedelta(days=days_per_snapshot)
         profiles = 0
@@ -83,15 +83,17 @@ class ProfileBuilder(object):
 
     def build_profile(self, username, nlistenings, start_date=None, end_date=None):
         try:
-            #db = self.dg.get_db_connection()
+            db = self.dg.get_db_connection()
 
             self.profile = {}
             res = self.db.Lastfm_Profiles.profile.find({'user_id': username})
             for l in res:
                 if l is not None and l['snapshot_end'] == end_date:
                     return l
-            #db.close()
+            db.close()
             self.profile['user_id'] = username
+
+
 
             # gather data
             # try:
@@ -102,59 +104,57 @@ class ProfileBuilder(object):
             else:
                 user_listenings = self.dg.get_user_listening(username, hundreds_of_listenings=nlistenings)
                 self.profile['most_recent_listening'] = datetime.datetime.fromtimestamp(
-                    long(user_listenings[0][-1].strftime("%s")))
+                    int(user_listenings[0][-1].strftime("%s")))
                 self.profile['least_recent_listening'] = datetime.datetime.fromtimestamp(
-                    long(user_listenings[-1][-1].strftime("%s")))
+                    int(user_listenings[-1][-1].strftime("%s")))
 
             # listenings stats
-            # print "OK 1"
             self.__listenings_stats(user_listenings)
+            # print("1")
             self.__temporal_stats(user_listenings)
+            # print("2")
 
             # artist stats
-            # print "OK 2"
             self.__artist_stats(user_listenings)
+            # print("3")
 
             # genre stats
-            # print "OK 3"
-            self.__genre_stats(user_listenings)
+            #self.__genre_stats(user_listenings)
 
             # seq. patterns
-            # print "OK 3.5"
-            # @todo: rivedere
             # self.__seq_patterns_stats(user_listenings)
 
             # network
-            # print "OK 4"
-            #db = self.dg.get_db_connection()
+            db = self.dg.get_db_connection()
             res = self.db.Lastfm_Profiles.network_stars.find_one({'user_id': username})
             if res is None:
                 self.__get_network(username)
-            #db.close()
+            db.close()
+            # print("4")
 
             # composite indexes
-            # print "OK 5"
             self.profile['theta_tl'] = 0 if self.profile['nlistening'] == 0 else float(self.profile['ntracks']) / \
                                                                                  self.profile['nlistening']
             self.profile['theta_al'] = 0 if self.profile['nlistening'] == 0 else float(self.profile['nartists']) / \
                                                                                  self.profile['nlistening']
             self.profile['theta_bl'] = 0 if self.profile['nlistening'] == 0 else float(self.profile['nalbum']) / \
                                                                                  self.profile['nlistening']
-            self.profile['theta_gl'] = 0 if self.profile['nlistening'] == 0 else float(self.profile['ngenre']) / \
-                                                                                 self.profile['nlistening']
-            self.profile['theta_ga'] = 0 if self.profile['nartists'] == 0 else float(self.profile['ngenre']) / self.profile[
-                'nartists']
+            # self.profile['theta_gl'] = 0 if self.profile['nlistening'] == 0 else float(self.profile['ngenre']) / \
+            #                                                                     self.profile['nlistening']
+            # self.profile['theta_ga'] = 0 if self.profile['nartists'] == 0 else float(self.profile['ngenre']) / self.profile[
+            #    'nartists']
             self.profile['theta_bt'] = 0 if self.profile['ntracks'] == 0 else float(self.profile['nalbum']) / self.profile[
                 'ntracks']
+            # print("5")
 
-            # print "OK 6"
             self.__save_profile()
+            # print("6")
             # except:
             #    return False
         except:
             pass
 
-        # self.db.close()
+        self.db.close()
         return True
 
     @staticmethod
@@ -194,14 +194,14 @@ class ProfileBuilder(object):
             sup = item[1]
 
             is_closed = True
-            for closed_seq, closed_sup in closed_freq_seq.iteritems():
+            for closed_seq, closed_sup in closed_freq_seq.items():
                 if set(seq) <= set(closed_seq) and closed_sup >= sup:
                     is_closed = False
                     break
 
             if is_closed:
                 closed_freq_seq[seq] = sup
-        cls = [[x, y] for x, y in closed_freq_seq.iteritems() if len(x) > 1]
+        cls = [[x, y] for x, y in closed_freq_seq.items() if len(x) > 1]
 
         return cls
 
@@ -276,11 +276,12 @@ class ProfileBuilder(object):
         self.profile['nfriends'] = len(friends)
         dt = datetime.datetime.now()
         #db = self.dg.get_db_connection()
-        self.db.Lastfm_Profiles.network_stars.insert({'user_id': username, 'neighbors': friends,
+        self.db.Lastfm_Profiles.network_stars.insert_one({'user_id': username, 'neighbors': friends,
                                                   'crawl_date': dt})
         #db.close()
 
     def __listenings_stats(self, listenings):
+        # print(listenings)
         self.profile['nlistening'] = len(listenings)
 
         artist_to_listenings = {}
@@ -320,18 +321,18 @@ class ProfileBuilder(object):
         self.profile['nalbum'] = len(album_to_listenings)
 
         self.profile['ml_artist'] = None if len(artist_to_listenings) == 0 else \
-        max(artist_to_listenings.iteritems(), key=operator.itemgetter(1))[0]
+        max(artist_to_listenings.items(), key=operator.itemgetter(1))[0]
         self.profile['ml_track'] = None if len(track_to_listenings) == 0 else \
-        max(track_to_listenings.iteritems(), key=operator.itemgetter(1))[0]
+        max(track_to_listenings.items(), key=operator.itemgetter(1))[0]
         self.profile['ml_album'] = None if len(album_to_listenings) == 0 else \
-        max(album_to_listenings.iteritems(), key=operator.itemgetter(1))[0]
+        max(album_to_listenings.items(), key=operator.itemgetter(1))[0]
 
         self.profile['entropy_artist'] = 0 if len(artist_to_listenings) == 1 else \
-            self.__entropy(artist_to_listenings.values(), classes=len(artist_to_listenings))
+            self.__entropy(list(artist_to_listenings.values()), classes=len(artist_to_listenings))
         self.profile['entropy_track'] = 0 if len(track_to_listenings) == 1 else \
-            self.__entropy(track_to_listenings.values(), classes=len(track_to_listenings))
+            self.__entropy(list(track_to_listenings.values()), classes=len(track_to_listenings))
         self.profile['entropy_album'] = 0 if len(album_to_listenings) == 1 else \
-            self.__entropy(album_to_listenings.values(), classes=len(album_to_listenings))
+            self.__entropy(list(album_to_listenings.values()), classes=len(album_to_listenings))
 
         self.profile['freq_artist'] = artist_to_listenings
         self.profile['freq_track'] = track_to_listenings
@@ -340,12 +341,12 @@ class ProfileBuilder(object):
     def __artist_stats(self, listening):
         for l in listening:
             art = l[2]
-            #db = self.dg.get_db_connection()
+            db = self.dg.get_db_connection()
             if self.db.Lastfm_Profiles.artists.find_one({'name': art}) is None:
                 info = self.dg.get_artist_info(art)
                 if len(info) > 0:
-                    self.db.Lastfm_Profiles.artists.insert(info)
-            #db.close()
+                    self.db.Lastfm_Profiles.artists.insert_one(info)
+            db.close()
 
     def __genre_stats(self, listenings):
         aid = 0
@@ -400,9 +401,9 @@ class ProfileBuilder(object):
         self.profile['ngenre'] = len(genre_to_count)
         self.profile['freq_genre'] = genre_to_count
         self.profile['ml_genere'] = None if len(genre_to_count) == 0 else \
-        max(genre_to_count.iteritems(), key=operator.itemgetter(1))[0]
+        max(genre_to_count.items(), key=operator.itemgetter(1))[0]
         self.profile['entropy_genre'] = 0 if len(genre_to_count) <= 1 else \
-            self.__entropy(genre_to_count.values(), classes=len(genre_to_count))
+            self.__entropy(list(genre_to_count.values()), classes=len(genre_to_count))
         # print "CAAA"
 
     def __temporal_stats(self, listenings):
@@ -421,8 +422,8 @@ class ProfileBuilder(object):
 
         self.profile['freq_tod'] = time_slot_to_count
         self.profile['freq_dow'] = day_to_count
-        self.profile['entropy_dow'] = self.__entropy(day_to_count.values(), len(day_to_count))
-        self.profile['entropy_tod'] = self.__entropy(time_slot_to_count.values(), len(time_slot_to_count))
+        self.profile['entropy_dow'] = self.__entropy(list(day_to_count.values()), len(day_to_count))
+        self.profile['entropy_tod'] = self.__entropy(list(time_slot_to_count.values()), len(time_slot_to_count))
         self.profile["time_listening"] = time_listenings
 
     def dump_profile_on_file(self, filename):
@@ -435,15 +436,15 @@ class ProfileBuilder(object):
     def __save_profile(self):
         if self.profile['nlistening'] == 0:
             return
-        #db = self.dg.get_db_connection()
+        db = self.dg.get_db_connection()
         try:
-            self.db.Lastfm_Profiles.profile.insert(self.profile)
+            self.db.Lastfm_Profiles.profile.insert_one(self.profile)
         except:
             d = os.path.dirname("profile_error_dumps")
             if not os.path.exists(d):
                 os.makedirs(d)
             self.dump_profile_on_file("profile_error_dumps/%s.json" % self.profile['user_id'])
-        #db.close()
+        db.close()
 
     @staticmethod
     def __closest_point_on_segment(a, b, p):
@@ -492,7 +493,7 @@ class ProfileBuilder(object):
     def __knee(self, frequencies):
         if len(frequencies.keys()) == 0:
             return frequencies
-        a = frequencies.values()
+        a = list(frequencies.values())
         a = sorted(a)
 
         index, v_prev = self.__get_change_point(range(0, len(a)), a)
@@ -528,10 +529,10 @@ def gater_data(infos):
         result = pb.build_profile_series(inputs[0], inputs[1], inputs[2], inputs[3])
         pb.close()
     except:
-        print "Errore"
+        print("Error")
 
     #inputs[-1].close()
-    print "Terminated. Connection closed"
+    print("Terminated. Connection closed")
 
     return result
 
@@ -560,22 +561,23 @@ if __name__ == "__main__":
     db = dg.get_db_connection()
     f = open(settings[5])
     names = read_next_pool(f, len(settings[0]), db)
+    if len(names) == 0:
+        names = ['giuliorossetti']
     while len(names) > 0:
         try:
             pool = Pool(len(names))
-            print "Starting: %s" % names
+            print("Starting: %s" % names)
             # pb = ProfileBuilder("b0dd3e3357ccba7d85b0bfa1f7390142", "", db_config)
             # result = pb.build_profile_series("diegopennac", start_date, end_date, 30)
             # exit()
 
-            res = pool.map(gater_data, itertools.izip(names, itertools.repeat(start_date),
+            res = pool.map(gater_data, zip(names, itertools.repeat(start_date),
                                                   itertools.repeat(end_date), itertools.repeat(time_window),
                                                   settings[0], itertools.repeat(settings[1][0]),
                                                   itertools.repeat(db_config)))
             pool.close()
             pool.join()
-            print "Completed: %s" % res
+            print("Completed: %s" % res)
             names = read_next_pool(f, len(settings[0]), db)
         except: # OSError as e
-            #print e
             names = read_next_pool(f, len(settings[0]), db)
